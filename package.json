@@ -1,12 +1,12 @@
 {
   "name": "socket-io",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "",
   "type": "module",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon ./src/server.js"
+    "start": "nodemon ./src/index.js"
   },
   "keywords": [],
   "author": "",
