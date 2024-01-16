@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 
 <head>
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -66,46 +66,28 @@
     <ul id="messages"></ul>
     <form id="form" action="">
         <input id="input" autocomplete="off" /><button>Send</button>
-        <button id="toggle-btn">Disconnect</button>
     </form>
-    <script src="https://cdn.socket.io/4.1.2/socket.io.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <script>
-
-let counter = 0
-
+        let counter = 0;
 
         const socket = io({
+            ackTimeout: 10000,
+            retries: 3,
             auth: {
                 serverOffset: 0
-            },
-            // enable retries
-            askTimeout:10000,
-            retries:3
+            }
         });
 
         const form = document.getElementById('form');
         const input = document.getElementById('input');
         const messages = document.getElementById('messages');
 
-        const toggleButton = document.getElementById('toggle-btn');
-
-        toggleButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (socket.connected) {
-                toggleButton.innerText = 'Connect';
-                socket.disconnect();
-            } else {
-                toggleButton.innerText = 'Disconnect';
-                socket.connect();
-            }
-        });
-
         form.addEventListener('submit', (e) => {
             e.preventDefault();
             if (input.value) {
-                // compute a unique offset
-                const clientOffset = `${socket.id}-${counter++}`
-                socket.emit('chat message', input.value,clientOffset);
+                const clientOffset = `${socket.id}-${counter++}`;
+                socket.emit('chat message', input.value, clientOffset);
                 input.value = '';
             }
         });
@@ -117,55 +99,6 @@ let counter = 0
             window.scrollTo(0, document.body.scrollHeight);
             socket.auth.serverOffset = serverOffset;
         });
-
-        socket.on('hello', (arg) => {
-            console.log(arg); // 'world'
-        });
-
-        socket.on('hello', (arg1, arg2, arg3) => {
-            console.log(arg1); // 1
-            console.log(arg2); // '2'
-            console.log(arg3); // { 3: '4', 5: ArrayBuffer (1) [ 6 ] }
-        });
-
-        socket.on('request', (arg1, arg2, callback) => {
-            console.log(arg1); // { foo: 'bar' }
-            console.log(arg2); // 'baz'
-            callback({
-                status: 'ok'
-            });
-        });
-
-        socket.on('request', (arg1, arg2, callback) => {
-            console.log(arg1);
-            console.log(arg2);
-
-            callback({
-                status: 'ok'
-            })
-        })
-        socket.emit('hello', 1, '2', { 3: '4', 5: Uint8Array.from([6]) });
-
-        socket.onAny((eventName, ...args) => {
-            console.log(eventName);
-            console.log(args);
-        })
-
-        socket.onAnyOutgoing((eventName, ...args) => {
-            console.log(eventName);
-            console.log(args);
-        })
-
-        function emit(socket, event, arg) {
-                socket.timeout(5000).emit(event, arg, (err) => {
-                    if (err) {
-                        // no ack from the server, let's retry
-                        emit(socket, event, arg);
-                    }
-                });
-            }
-
-            emit(socket, 'hello', 'world');
     </script>
 </body>
 
