@@ -1,51 +1,50 @@
 import express from "express";
-import http from "http";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { createServer } from "node:http";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { Server } from "socket.io";
-import cluster from "cluster";
-import { createAdapter, setupPrimary } from "@socket.io/cluster-adapter";
-import { cpus } from "os";
 import pkg from "pg";
+import { availableParallelism } from "node:os";
+import cluster from "node:cluster";
+import { createAdapter, setupPrimary } from "@socket.io/cluster-adapter";
 
 const { Pool } = pkg;
 
-
 if (cluster.isPrimary) {
-  const numCPUs = cpus().length;
+  const numCPUs = availableParallelism();
   for (let i = 0; i < numCPUs; i++) {
     cluster.fork({
       PORT: 3000 + i,
     });
   }
-  
+
   setupPrimary();
 } else {
-  const pool = new Pool({
-    connectionString:
-    "postgres://postgres:1015@localhost:5432/messanger",
-  });
-  
-  const db = await pool.connect();
+  const username = process.env.USERNAME || "postgres";
+  const host_db = process.env.HOST || "localhost";
+  const db_name = process.env.DBNAME || "messanger";
+  const pass = process.env.DBPASS || "1015";
+  const port_db = process.env.DBPORT || 5432;
+  const port = process.env.PORT || 3000;
 
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id SERIAL PRIMARY KEY,
-      client_offset TEXT UNIQUE,
-      content TEXT
-      );
-      `);
-      
-      const app = express();
-      const server = http.createServer(app);
-      const io = new Server(server, {
-        connectionStateRecovery: {},
-        adapter: createAdapter(),
-      });
-      
-      const __dirname = dirname(fileURLToPath(import.meta.url));
-      
-      app.get("/", (req, res) => {
+  const pool = new Pool({
+    user: username,
+    host: host_db,
+    database: db_name,
+    password: pass,
+    port: port_db,
+  });
+
+  const app = express();
+  const server = createServer(app);
+  const io = new Server(server, {
+    connectionStateRecovery: {},
+    adapter: createAdapter(),
+  });
+
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+
+  app.get("/", (req, res) => {
     res.sendFile(join(__dirname, "../public/index.html"));
   });
 
@@ -53,7 +52,7 @@ if (cluster.isPrimary) {
     socket.on("chat message", async (msg, clientOffset, callback) => {
       let result;
       try {
-        result = await db.query(
+        result = await pool.query(
           "INSERT INTO messages (content, client_offset) VALUES ($1, $2) RETURNING id",
           [msg, clientOffset]
         );
@@ -61,7 +60,6 @@ if (cluster.isPrimary) {
         if (e.code === "23505") {
           callback();
         } else {
-          // nothing to do, just let the client retry
         }
         return;
       }
@@ -71,20 +69,18 @@ if (cluster.isPrimary) {
 
     if (!socket.recovered) {
       try {
-        const { rows } = await db.query(
+        const queryResult = await pool.query(
           "SELECT id, content FROM messages WHERE id > $1",
           [socket.handshake.auth.serverOffset || 0]
         );
-        rows.forEach((row) => {
+        for (const row of queryResult.rows) {
           socket.emit("chat message", row.content, row.id);
-        });
+        }
       } catch (e) {
-        // something went wrong
+        return e;
       }
     }
   });
-
-  const port = process.env.PORT || 3000;
 
   server.listen(port, () => {
     console.log(`server running at http://localhost:${port}`);
