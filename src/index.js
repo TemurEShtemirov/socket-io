@@ -1,20 +1,22 @@
 import express from "express";
-import { createServer } from "node:http";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { createServer } from "http";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 import { Server } from "socket.io";
 import pkg from "pg";
-import { availableParallelism } from "node:os";
-import cluster from "node:cluster";
+import { cpus } from "os";
+import cluster from "cluster";
 import { createAdapter, setupPrimary } from "@socket.io/cluster-adapter";
+import cors from "cors";
+import { promisify } from "util";
 
 const { Pool } = pkg;
 
 if (cluster.isPrimary) {
-  const numCPUs = availableParallelism();
+  const numCPUs = cpus().length;
   for (let i = 0; i < numCPUs; i++) {
     cluster.fork({
-      PORT: 3000 + i,
+      PORT: 5050 + i,
     });
   }
 
@@ -24,17 +26,14 @@ if (cluster.isPrimary) {
   const host_db = process.env.HOST || "localhost";
   const db_name = process.env.DBNAME || "messanger";
   const pass = process.env.DBPASS || "1015";
-  const port_db = process.env.DBPORT || 5432;
-  const port = process.env.PORT || 3000;
+
+  const port = process.env.PORT || 5050;
+
+  const connectionString = "postgres://postgres:1015@localhost:5432/messanger";
 
   const pool = new Pool({
-    user: username,
-    host: host_db,
-    database: db_name,
-    password: pass,
-    port: port_db,
+    connectionString: connectionString,
   });
-
   const app = express();
   const server = createServer(app);
   const io = new Server(server, {
@@ -42,44 +41,57 @@ if (cluster.isPrimary) {
     adapter: createAdapter(),
   });
 
-  const __dirname = dirname(fileURLToPath(import.meta.url));
+  app.use(cors());
+  app.use(express.json());
+
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
 
   app.get("/", (req, res) => {
     res.sendFile(join(__dirname, "../public/index.html"));
   });
 
-  io.on("connection", async (socket) => {
+  io.on("connection", (socket) => {
     socket.on("chat message", async (msg, clientOffset, callback) => {
-      let result;
       try {
-        result = await pool.query(
+        const queryAsync = promisify(pool.query);
+
+        const result = await queryAsync.call(
+          pool,
           "INSERT INTO messages (content, client_offset) VALUES ($1, $2) RETURNING id",
           [msg, clientOffset]
         );
+
+        if (callback) {
+          callback();
+        }
+
+        io.emit("chat message", msg, result.rows[0].id);
       } catch (e) {
-        if (e.code === "23505") {
+        if (e.code === "23505" && callback) {
           callback();
         } else {
+          console.error(e);
         }
-        return;
       }
-      io.emit("chat message", msg, result.rows[0].id);
-      callback();
-    });
 
-    if (!socket.recovered) {
-      try {
-        const queryResult = await pool.query(
-          "SELECT id, content FROM messages WHERE id > $1",
-          [socket.handshake.auth.serverOffset || 0]
-        );
-        for (const row of queryResult.rows) {
-          socket.emit("chat message", row.content, row.id);
+      if (!socket.recovered) {
+        try {
+          socket.recovered = true; // Set the recovered property
+
+          const queryResult = await pool.query(
+            "SELECT id, content FROM messages WHERE id > $1",
+            [socket.handshake.auth.serverOffset || 0]
+          );
+
+          for (const row of queryResult.rows) {
+            socket.emit("chat message", row.content, row.id);
+          }
+        } catch (e) {
+          console.error(e);
         }
-      } catch (e) {
-        return e;
       }
-    }
+    });
   });
 
   server.listen(port, () => {
