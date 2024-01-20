@@ -33,18 +33,16 @@
             flex-grow: 1;
             border-radius: 2rem;
             margin: 0.25rem;
-            max-width: 100%;
+            width: 700px;
             border: 1px solid #2D2D2D;
-            margin-left: 15px;
         }
 
         #input:focus {
             outline: none;
         }
 
-        .send {
-            width: 100px;
-            margin-left: 40px;
+        #form>button {
+            width: 200px;
         }
 
         #messages {
@@ -60,9 +58,6 @@
             background: #F1F1F1;
             border-radius: 15px 50px 30px 5px;
             color: #2D2D2D;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
 
         #messages>li:nth-child(odd) {
@@ -71,65 +66,30 @@
             background: #F1F1F1;
             border-radius: 15px 50px 30px 5px;
             color: #2D2D2D;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .delete-button {
-            cursor: pointer;
-            color: white;
-            background-color: #dc3545;
-            border: none;
-            width: 100px;
-            padding: 0.2rem 0.5rem;
-            border-radius: 0.25rem;
-            margin-left: 10px;
-        }
-
-        .delete_all {
-            margin-left: 10px;
-            margin-right: 20px;
-
-        }
-
-        .alert__ {
-            width: 600px;
-            animation-name: animat;
-            animation-duration: 5s;
-            animation-delay: 0.1s;
-            transition: 1s;
-        }
-
-        @keyframes animat {
-            0% {
-                left: -620px;
-                top: 0px;
-            }
-
-            50% {
-                left: 25px;
-                top: 0px;
-            }
-
-            100% {
-                left: -620px;
-                top: 0px;
-            }
-
-
         }
     </style>
 </head>
 
 <body>
-    <div id="alertContainer"></div>
+    <!-- <ul id="messages"></ul>
+    <form id="form" action="">
+        <input placeholder="type there..." id="input" />
+        <button class="btn btn-outline-primary">Send</button>
+    </form>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"
+        integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js"
+        integrity="sha384-BBtl+eGJRgqQAUMxJ7pMwbEyER4l1g+O15P+16Ep7Q9Q+zqX6gSbd85u4mG4QzX+"
+        crossorigin="anonymous"></script> -->
+
     <ul id="messages"></ul>
     <form id="form" action="">
         <input placeholder="type there..." id="input" />
-        <button class="btn btn-outline-primary send" onclick="sendMessage()">Send</button>
-        <button class="btn btn-danger delete_all" onclick="deleteAllMessages()">Delete All</button>
+        <button class="btn btn-outline-primary" onclick="sendMessage()">Send</button>
     </form>
+    <button class="btn btn-danger" onclick="deleteAllMessages()">Delete All Messages</button>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"
         integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r"
@@ -141,7 +101,6 @@
         "use strict";
 
         let counter = 0;
-
         const socket = io('http://localhost:5050', {
             auth: {
                 serverOffset: 0
@@ -156,21 +115,29 @@
 
         form.addEventListener('submit', (e) => {
             e.preventDefault();
-            sendMessage();
+            if (input.value) {
+                const clientOffset = `${socket.id}-${counter++}`;
+                socket.emit('chat message', input.value, clientOffset);
+                input.value = '';
+            }
         });
 
-        // geting messages from server
+        // socket.on('chat message', (msg, serverOffset) => {
+        //     const item = document.createElement('li');
+        //     item.textContent = msg;
+        //     messages.appendChild(item);
+        //     window.scrollTo(0, document.body.scrollHeight);
+        //     socket.auth.serverOffset = serverOffset;
+        // });
+
         socket.on('chat message', (msg, serverOffset) => {
             const item = document.createElement('li');
             item.textContent = msg;
 
-            // ading class name
-            const class_ = 'message__'
-            item.className = class_
             // Add delete button to each message item
             const deleteButton = document.createElement('button');
             deleteButton.textContent = 'Delete';
-            deleteButton.className = 'delete-button';
+            deleteButton.className = 'btn btn-sm btn-danger ms-2';
             deleteButton.onclick = function () {
                 deleteMessage(serverOffset);
             };
@@ -182,8 +149,6 @@
             socket.auth.serverOffset = serverOffset;
         });
 
-        // send message func.
-
         function sendMessage() {
             if (input.value) {
                 const clientOffset = `${socket.id}-${counter++}`;
@@ -192,8 +157,6 @@
             }
         }
 
-        // delete all messages from chat
-
         function deleteAllMessages() {
             fetch('http://localhost:5050/delete', {
                 method: 'DELETE',
@@ -201,30 +164,10 @@
                 .then(response => response.json())
                 .then(data => {
                     console.log(data);
-
-                    const alertContainer = document.getElementById('alertContainer');
-                    const alertDiv = document.createElement('div');
-
-                    if (data.success) {
-                        alertDiv.className = 'alert alert-success mt-5 alert__';
-                        alertDiv.textContent = data.message;
-                        messages.innerHTML = '';  // Clear messages
-                    } else {
-                        alertDiv.className = 'alert alert-danger';
-                        alertDiv.textContent = data.error;
-                    }
-
-                    alertContainer.innerHTML = '';  // Clear previous alerts
-                    alertContainer.appendChild(alertDiv);
-
-                    // Hide the alert after 3 seconds (5000 milliseconds)
-                    setTimeout(() => {
-                        alertContainer.innerHTML = '';
-                    }, 5000);
+                    messages.innerHTML = '';
                 })
                 .catch(error => console.error('Error:', error));
         }
-        // delete message by id
 
         function deleteMessage(messageId) {
             fetch(`http://localhost:5050/delete/${messageId}`, {
@@ -236,6 +179,7 @@
                 })
                 .catch(error => console.error('Error:', error));
         }
+
 
         // Optional: Add error handling
         socket.on('error', (err) => {

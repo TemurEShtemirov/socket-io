@@ -51,6 +51,44 @@ if (cluster.isPrimary) {
     res.sendFile(join(__dirname, "../public/index.html"));
   });
 
+  app.delete("/delete", async (req, res) => {
+    try {
+      // Delete all messages in the messages table
+      await pool.query("DELETE FROM messages");
+
+      res
+        .status(200)
+        .json({ success: true, message: "All messages deleted successfully." });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ success: false, error: "Internal Server Error" });
+    }
+  });
+
+  app.delete("/delete/:id", async (req, res) => {
+    const messageId = req.params.id;
+
+    try {
+      // Delete the message with the specified ID from the messages table
+      const result = await pool.query(
+        "DELETE FROM messages WHERE id = $1 RETURNING *",
+        [messageId]
+      );
+
+      if (result.rowCount === 0) {
+        // If no rows were affected, the message with the given ID was not found
+        res.status(404).json({ success: false, error: "Message not found." });
+      } else {
+        res
+          .status(200)
+          .json({ success: true, message: "Message deleted successfully." });
+      }
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ success: false, error: "Internal Server Error" });
+    }
+  });
+
   io.on("connection", (socket) => {
     socket.on("chat message", async (msg, clientOffset, callback) => {
       try {
