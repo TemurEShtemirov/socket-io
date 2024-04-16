@@ -29,7 +29,8 @@ if (cluster.isPrimary) {
 
   const port = process.env.PORT || 5050;
 
-  const connectionString = "postgres://postgres:1015@localhost:5432/messanger";
+  const connectionString =
+    " postgres://lhuztrzf:0tO8QWZUYzvH-MNVa0w3xino166jEBBR@surus.db.elephantsql.com/lhuztrzf";
 
   const pool = new Pool({
     connectionString: connectionString,
